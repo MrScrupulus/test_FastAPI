@@ -1,29 +1,25 @@
-# routers/todo.py
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from database import get_db
-from schema import TodoCreate, TodoUpdate, TodoOut
-import crud
+from crud import get_todos, create_todo
+from schema import Todo, TodoCreate
+from database import SessionLocal
 
-router = APIRouter(prefix="/todos", tags=["todos"])
+router = APIRouter()
 
-@router.get("/", response_model=list[TodoOut])
-def read_todos(db: Session = Depends(get_db)):
-    return crud.get_todos(db)
+# Dépendance pour obtenir la session de la base de données
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
-@router.post("/", response_model=TodoOut)
-def add_todo(todo: TodoCreate, db: Session = Depends(get_db)):
-    return crud.create_todo(db, todo)
+@router.get("/todos", response_model=list[Todo])
+def read_todos(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    todos = get_todos(db=db, skip=skip, limit=limit)
+    return todos
 
-@router.put("/{todo_id}", response_model=TodoOut)
-def mark_todo(todo_id: int, update: TodoUpdate, db: Session = Depends(get_db)):
-    updated = crud.update_todo(db, todo_id, update.completed)
-    if not updated:
-        raise HTTPException(status_code=404, detail="Todo not found")
-    return updated
-
-@router.delete("/{todo_id}", status_code=204)
-def remove_todo(todo_id: int, db: Session = Depends(get_db)):
-    deleted = crud.delete_todo(db, todo_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Todo not found")
+@router.post("/todos", response_model=Todo)
+def create_todo_item(todo: TodoCreate, db: Session = Depends(get_db)):
+    db_todo = create_todo(db=db, task=todo.task)
+    return db_todo
